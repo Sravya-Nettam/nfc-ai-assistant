@@ -1,0 +1,7 @@
+Welcome to the NFC employee portal training.
+
+To login, employees must use their company email ID and password.
+
+If password is forgotten, click on "Forgot Password".
+
+Employees can access payroll, attendance, and leave management modules from the dashboard.
