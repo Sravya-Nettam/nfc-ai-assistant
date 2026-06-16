@@ -17,10 +17,27 @@ with open("vector_store.pkl", "rb") as f:
     ) = pickle.load(f)
 
 # -----------------------------
-# Streamlit UI
+# Streamlit Page Config
+# -----------------------------
+
+st.set_page_config(
+    page_title="NFC Offline AI Assistant",
+    layout="centered"
+)
+
+# -----------------------------
+# Title
 # -----------------------------
 
 st.title("NFC Offline AI Assistant")
+
+st.write(
+    "Offline enterprise document assistant"
+)
+
+# -----------------------------
+# User Question
+# -----------------------------
 
 question = st.text_input(
     "Ask a question:"
@@ -32,134 +49,111 @@ question = st.text_input(
 
 if question:
 
-    # Convert question into vector
-    question_vector = vectorizer.transform(
-        [question]
-    )
+    with st.spinner(
+        "Searching documents..."
+    ):
 
-    # Similarity calculation
-    similarities = cosine_similarity(
-        question_vector,
-        vectors
-    )
-
-    # Top matching chunks
-    top_indices = similarities[0].argsort()[-3:][::-1]
-
-    top_scores = similarities[0][top_indices]
-
-    best_score = top_scores[0]
-
-    # -----------------------------
-    # Low confidence handling
-    # -----------------------------
-
-    if best_score < 0.15:
-
-        st.warning(
-            """
-            I could not confidently find the answer
-            in the available documents.
-
-            Please contact support:
-
-            support@nfc.com
-            1800-000-123
-            """
+        # Convert question to vector
+        question_vector = vectorizer.transform(
+            [question]
         )
 
-    else:
-
-        answer_sentences = []
-
-        used_sources = set()
-
-        # Important words from question
-        question_words = [
-            word.lower()
-            for word in question.split()
-            if len(word) > 3
-        ]
-
-        # -----------------------------
-        # Process chunks
-        # -----------------------------
-
-        for i, index in enumerate(top_indices):
-
-            if top_scores[i] > 0.15:
-
-                chunk = chunks[index]
-
-                source = sources[index]
-
-                used_sources.add(source)
-
-                # Split chunk into sentences
-                sentences = chunk.split(".")
-
-                for sentence in sentences:
-
-                    sentence = sentence.strip()
-
-                    # Ignore short sentences
-                    if len(sentence) < 15:
-                        continue
-
-                    # Ignore headings/noise
-                    if (
-                        "guide" in sentence.lower()
-                        or "training" in sentence.lower()
-                    ):
-                        continue
-
-                    # Match count
-                    match_count = sum(
-                        1
-                        for word in question_words
-                        if word in sentence.lower()
-                    )
-
-                    # Keep relevant sentences only
-                    if match_count >= 1:
-
-                        answer_sentences.append(
-                            sentence + "."
-                        )
-
-        # Remove duplicates
-        final_answer = list(
-            dict.fromkeys(answer_sentences)
+        # Similarity calculation
+        similarities = cosine_similarity(
+            question_vector,
+            vectors
         )
 
-        # -----------------------------
-        # Final display
-        # -----------------------------
+        # Get top matches
+        top_indices = similarities[0].argsort()[-3:][::-1]
 
-        if final_answer:
+        top_scores = similarities[0][top_indices]
 
-            st.subheader("Answer")
+        best_score = top_scores[0]
 
-            for sentence in final_answer:
-
-                st.write("- " + sentence)
-
-            st.subheader("Sources")
-
-            for source in used_sources:
-
-                st.write("- " + source)
-
-        else:
+        # Low confidence
+        if best_score < 0.05:
 
             st.warning(
                 """
                 I could not confidently find the answer
                 in the available documents.
 
-                Please contact support:
-
-                support@nfc.com
-                1800-000-123
+                Please contact support.
                 """
             )
+
+        else:
+
+            answer_sentences = []
+
+            question_words = [
+                word.lower()
+                for word in question.split()
+                if len(word) > 3
+            ]
+
+            # Process relevant chunks
+            for i, index in enumerate(top_indices):
+
+                if top_scores[i] > 0.05:
+
+                    chunk = chunks[index]
+
+                    sentences = (
+                        chunk
+                        .replace("\n", ". ")
+                        .split(".")
+                    )
+
+                    for sentence in sentences:
+
+                        sentence = sentence.strip()
+
+                        if len(sentence) < 20:
+                            continue
+
+                        lower_sentence = sentence.lower()
+
+                        if (
+                            "chapter" in lower_sentence
+                            or "contents" in lower_sentence
+                        ):
+                            continue
+
+                        match_count = sum(
+                            1
+                            for word in question_words
+                            if word in lower_sentence
+                        )
+
+                        if match_count >= 1:
+
+                            answer_sentences.append(
+                                sentence + "."
+                            )
+
+            # Remove duplicates
+            final_answer = list(
+                dict.fromkeys(answer_sentences)
+            )
+
+            # Final output
+            if final_answer:
+
+                st.subheader("Answer")
+
+                for sentence in final_answer[:5]:
+
+                    st.write(
+                        "- " + sentence
+                    )
+
+            else:
+
+                st.warning(
+                    """
+                    Relevant information found,
+                    but no exact answer sentence matched.
+                    """
+                )

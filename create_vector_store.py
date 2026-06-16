@@ -3,88 +3,79 @@ import os
 import pickle
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 from sklearn.feature_extraction.text import TfidfVectorizer
-
-# -----------------------------
-# Read PDFs and TXT files
-# -----------------------------
 
 folder_path = "documents"
 
 documents = []
 
+# Read PDFs and TXT files
 for file in os.listdir(folder_path):
 
     file_path = os.path.join(folder_path, file)
 
-    text_content = ""
-
-    # PDF files
     if file.endswith(".pdf"):
 
         reader = PdfReader(file_path)
 
+        text = ""
+
         for page in reader.pages:
 
-            text = page.extract_text()
+            extracted = page.extract_text()
 
-            if text:
-
-                text_content += text + "\n"
-
-    # TXT transcript files
-    elif file.endswith(".txt"):
-
-        with open(file_path, "r", encoding="utf-8") as f:
-
-            text_content += f.read() + "\n"
-
-    # Store file + content
-    if text_content.strip():
+            if extracted:
+                text += extracted + "\n"
 
         documents.append({
-            "source": file,
-            "content": text_content
+            "text": text,
+            "source": file
         })
 
-# -----------------------------
-# Split into chunks
-# -----------------------------
+    elif file.endswith(".txt"):
 
+        with open(
+            file_path,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            text = f.read()
+
+            documents.append({
+                "text": text,
+                "source": file
+            })
+
+# Better chunking
 text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=120,
-    chunk_overlap=20
+    chunk_size=1200,
+    chunk_overlap=250
 )
 
-all_chunks = []
-all_sources = []
+chunks = []
+sources = []
 
 for doc in documents:
 
-    chunks = text_splitter.split_text(
-        doc["content"]
+    split_chunks = text_splitter.split_text(
+        doc["text"]
     )
 
-    for chunk in chunks:
+    for chunk in split_chunks:
 
-        all_chunks.append(chunk)
+        chunks.append(chunk)
+        sources.append(doc["source"])
 
-        all_sources.append(doc["source"])
+print(f"Total chunks created: {len(chunks)}")
 
-print(f"Total chunks created: {len(all_chunks)}")
+# TF-IDF
+vectorizer = TfidfVectorizer(
+    stop_words="english",
+    ngram_range=(1, 2)
+)
 
-# -----------------------------
-# TF-IDF Vectorization
-# -----------------------------
-
-vectorizer = TfidfVectorizer()
-
-vectors = vectorizer.fit_transform(all_chunks)
-
-# -----------------------------
-# Save everything
-# -----------------------------
+vectors = vectorizer.fit_transform(chunks)
 
 with open("vector_store.pkl", "wb") as f:
 
@@ -92,8 +83,8 @@ with open("vector_store.pkl", "wb") as f:
         (
             vectorizer,
             vectors,
-            all_chunks,
-            all_sources
+            chunks,
+            sources
         ),
         f
     )
